@@ -17,7 +17,7 @@ The rule, its propositions and their proofs, what was found in Simoa 10.15.0, th
 | `src/anchor.h`, `src/anchor.c` | the store: freestanding C17, no library, no allocation, no imports |
 | `src/sha256.c`, `src/sha256.h` | SHA-256 |
 | `src/wasm.c` | WebAssembly glue: one store and a scratch area per instance |
-| `dist/anchor.wasm` | the built module (48,328 bytes; SHA-256 `eaca3c9a691f8868ba27a6117e744a2ba5be490dd7bb19ce849f2c1097937cf0`, reproducible with clang 18.1.3) |
+| `dist/anchor.wasm` | the built module (49,084 bytes; SHA-256 `bb302b218ce6bd2910c1d156e4225d961113141e7733e57fb5c9154dd29b649b`, reproducible with clang 18.1.3) |
 | `oracle/anchor.mjs`, `oracle/sha256.mjs` | an independent JavaScript implementation; no dependencies; runs in a browser |
 | `host/anchor-wasm.mjs` | a binding for `dist/anchor.wasm` with the same interface as the oracle |
 | `tests/` | the test suites, the Simoa 10.15.0 fixture, frozen vectors and `RESULTS.json` from the last full run |
@@ -42,6 +42,7 @@ node tests/run.mjs    # every suite (about 3 minutes); writes tests/RESULTS.json
 | `differential` | 12 long random histories, C and JavaScript after every call, save/load transparency, frozen vectors |
 | `bitflip` | every single-bit change to a saved file |
 | `scenarios` | 24 named ways identity can drift, each refused or bounded |
+| `hardening` | regressions for the findings of an independent review, and every table filled to capacity |
 | `simoa` | Simoa 10.15.0's own 31-topic table: distances, the reproduced 10.15.0 cases, 2,000 conversations |
 
 ## Using it

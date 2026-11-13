@@ -13,6 +13,9 @@ export const PERSONS = 8, TRAITS = 64, WRITERS = 16, TOKENS = 8, RING = 32, USED
 export const LABELS = 4, LABEL_MAX = 32, NAME_MAX = 24, LINE_MAX = 512, DEPTH_MAX = 7;
 export const LEVEL_NEW = 8, LEVEL_REPEAT = 4, LEVEL_MAX = 16, LAPSE = 64, NONE = -128;
 export const VIEW_BYTES = 32, WRITER_BYTES = 168;
+// The largest file a store can save (see AN_FILE_MAX in src/anchor.h).
+export const FILE_MAX = 92 + (1 + 32 * 16) + 64 * (1 + 4 * 33) + 7 * (2 + 24 + 3 * 64) + (1 + 16 * 168) +
+  (2 + 1024 * 32) + (1 + 8 * 53) + (2 + 7 * 7 * 64 * 32) + 32;
 export const CHANNEL = Object.freeze({ EXTERNAL: 0, AGENT: 1, USER: 2, TOOL: 3, SYSTEM: 4 });
 export const NO_PERSONA = 255;
 export const CLS = Object.freeze({ FIRST: 1, READ: 2, TOLD: 3 });
@@ -24,7 +27,7 @@ export const E = Object.freeze({
 });
 export const LOAD = Object.freeze({
   SHORT: -20, MAGIC: -21, DIGEST: -22, PARAM: -23, COUNTER: -24, JOURNAL: -25, TRAIT: -26,
-  PERSON: -27, WRITER: -28, USED: -29, TOKEN: -30, VIEW: -31,
+  PERSON: -27, WRITER: -28, USED: -29, TOKEN: -30, VIEW: -31, LONG: -32,
 });
 export const OP = Object.freeze({
   INIT: 1, LABEL: 2, DEFINE: 3, SEAL: 4, INCEPT: 5, ROTATE: 6, RECOVER: 7, REVOKE: 8, EPISODE: 9,
@@ -59,14 +62,15 @@ function equal(a, b, n = Math.max(a.length, b.length)) {
 
 const isZero = a => { for (const x of a) if (x !== 0) return false; return true; };
 
+// Fixed-size arguments are copied: the store never keeps a view of the caller's memory.
 function need32(x, name) {
   if (!(x instanceof Uint8Array) || x.length !== 32) throw new TypeError(name + ' must be a Uint8Array(32)');
-  return x;
+  return Uint8Array.from(x);
 }
 
 function need16(x, name) {
   if (!(x instanceof Uint8Array) || x.length !== 16) throw new TypeError(name + ' must be a Uint8Array(16)');
-  return x;
+  return Uint8Array.from(x);
 }
 
 // Bytes [0, len) of a variable-length argument, when len is a valid length for it.
@@ -114,7 +118,10 @@ export function distance(K, c1, g1, c2, g2) {
 /** The expressed value of one trait, from the core, the give and first-hand voices. */
 export function lean(core, give, values, levels, sigmaNum, sigmaDen, saturation, voicesMin) {
   const count = values.length;
-  if (core < -2 || core > 2 || give < 0 || give > 2 || count > PERSONS - 1 || levels.length !== count) return NONE;
+  if (count > PERSONS - 1 || levels.length !== count) return NONE;
+  // Only integers, as C's types allow.
+  if (![core, give, sigmaNum, sigmaDen, saturation, voicesMin, ...values, ...levels].every(Number.isInteger)) return NONE;
+  if (core < -2 || core > 2 || give < 0 || give > 2) return NONE;
   if (sigmaDen < 1 || sigmaDen > 100 || sigmaNum < 0 || sigmaNum > sigmaDen || saturation < 1 ||
       saturation > 64 || voicesMin < 2 || voicesMin > 7) return NONE;
   for (let i = 0; i < count; i++) {
@@ -192,9 +199,10 @@ export class AnchorStore {
     entry[0] = b[0];
     entry[1] = r & 255;
     entry.set(d.subarray(0, 14), 2);
-    if (this.ring.length === RING) this.base = sha256(concat(this.base, this.ring.shift()));
+    // Each entry is chained with its position, so a head kept elsewhere also fixes the count.
+    if (this.ring.length === RING) this.base = sha256(concat(this.base, this.ring.shift(), u32le(this.events - RING + 1)));
     this.ring.push(entry);
-    this.head = sha256(concat(this.head, entry));
+    this.head = sha256(concat(this.head, entry, u32le(this.events + 1)));
     this.events = (this.events + 1) >>> 0;
     if (r < 0 && this.refused !== 0xffffffff) this.refused++;
     return r;
@@ -328,10 +336,11 @@ export class AnchorStore {
 
   init(persons, traits, sigmaNum, sigmaDen, saturation, voicesMin, distinctMin) {
     persons |= 0; traits |= 0; sigmaNum |= 0; sigmaDen |= 0; saturation |= 0; voicesMin |= 0; distinctMin |= 0;
-    this.#reset();
+    // Invalid arguments change nothing; valid ones start a new, empty store.
     if (persons < 2 || persons > PERSONS || traits < 1 || traits > TRAITS || sigmaDen < 1 || sigmaDen > 100 ||
         sigmaNum < 0 || sigmaNum > sigmaDen || saturation < 1 || saturation > 64 || voicesMin < 2 ||
         voicesMin > 7 || distinctMin < 1 || distinctMin > 255) return E.ARG;
+    this.#reset();
     Object.assign(this, { n: persons, K: traits, sn: sigmaNum, sd: sigmaDen, sat: saturation, m: voicesMin, delta: distinctMin });
     this.ready = true;
     this.base = sha256(ascii('anchor journal v1'));
@@ -348,9 +357,9 @@ export class AnchorStore {
 
   label(trait, label, len = label.length) {
     trait |= 0; len |= 0;
+    const bytes = prefix(label, len, LABEL_MAX);
     const blocked = this.#blocked();
     if (blocked) return blocked;
-    const bytes = prefix(label, len, LABEL_MAX);
     const r = new Record(OP.LABEL).i32(trait).i32(len);
     if (bytes) r.raw(bytes);
     if (this.sealed) return this.#journal(r, E.STATE);
@@ -370,9 +379,10 @@ export class AnchorStore {
 
   define(person, name, core, give, nameLen = name.length) {
     person |= 0; nameLen |= 0;
+    const nm = prefix(name, nameLen, NAME_MAX);
     const blocked = this.#blocked();
     if (blocked) return blocked;
-    const nm = prefix(name, nameLen, NAME_MAX), c = coreBytes(core, this.K), g = giveBytes(give, this.K);
+    const c = coreBytes(core, this.K), g = giveBytes(give, this.K);
     const r = new Record(OP.DEFINE).i32(person);
     this.#definitionRecord(r, nm, nameLen, c, g);
     if (this.sealed) return this.#journal(r, E.STATE);
@@ -401,7 +411,7 @@ export class AnchorStore {
 
   incept(channel, instance, root, persona, key, next) {
     channel |= 0; instance |= 0; root |= 0; persona |= 0;
-    need32(key, 'key'); need32(next, 'next');
+    key = need32(key, 'key'); next = need32(next, 'next');
     const blocked = this.#blocked();
     if (blocked) return blocked;
     const r = new Record(OP.INCEPT).i32(channel).i32(instance).i32(root).i32(persona).raw(key).raw(next);
@@ -423,7 +433,7 @@ export class AnchorStore {
 
   rotate(w, secret, key, next) {
     w |= 0;
-    need32(secret, 'secret'); need32(key, 'key'); need32(next, 'next');
+    secret = need32(secret, 'secret'); key = need32(key, 'key'); next = need32(next, 'next');
     const blocked = this.#blocked();
     if (blocked) return blocked;
     const r = new Record(OP.ROTATE).i32(w).raw(secret).raw(key).raw(next);
@@ -441,7 +451,7 @@ export class AnchorStore {
 
   recover(w, key, next, token) {
     w |= 0;
-    need32(key, 'key'); need32(next, 'next'); need16(token, 'token');
+    key = need32(key, 'key'); next = need32(next, 'next'); token = need16(token, 'token');
     const blocked = this.#blocked();
     if (blocked) return blocked;
     const r = new Record(OP.RECOVER).i32(w).raw(key).raw(next).raw(token);
@@ -538,9 +548,9 @@ export class AnchorStore {
 
   userLine(w, keyseq, line, hintTrait, hintValue, listeners, len = line.length) {
     w |= 0; keyseq |= 0; hintTrait |= 0; hintValue |= 0; listeners |= 0; len |= 0;
+    const bytes = prefix(line, len, LINE_MAX);
     const blocked = this.#blocked();
     if (blocked) return blocked;
-    const bytes = prefix(line, len, LINE_MAX);
     const r = new Record(OP.LINE).i32(w).i32(keyseq).i32(len);
     if (bytes) r.raw(bytes);
     r.i32(hintTrait).i32(hintValue).i32(listeners);
@@ -575,7 +585,7 @@ export class AnchorStore {
 
   confirm(w, keyseq, trait, value, line, token) {
     w |= 0; keyseq |= 0; trait |= 0; value |= 0;
-    need16(line, 'line'); need16(token, 'token');
+    line = need16(line, 'line'); token = need16(token, 'token');
     const blocked = this.#blocked();
     if (blocked) return blocked;
     const r = new Record(OP.CONFIRM).i32(w).i32(keyseq).i32(trait).i32(value).raw(line).raw(token);
@@ -599,10 +609,11 @@ export class AnchorStore {
 
   redefine(w, keyseq, person, name, core, give, token, nameLen = name.length) {
     w |= 0; keyseq |= 0; person |= 0; nameLen |= 0;
-    need16(token, 'token');
+    token = need16(token, 'token');
+    const nm = prefix(name, nameLen, NAME_MAX);
     const blocked = this.#blocked();
     if (blocked) return blocked;
-    const nm = prefix(name, nameLen, NAME_MAX), c = coreBytes(core, this.K), g = giveBytes(give, this.K);
+    const c = coreBytes(core, this.K), g = giveBytes(give, this.K);
     const r = new Record(OP.REDEFINE).i32(w).i32(keyseq).i32(person);
     this.#definitionRecord(r, nm, nameLen, c, g);
     r.raw(token);
@@ -649,7 +660,7 @@ export class AnchorStore {
 
   issueConfirm(trait, value, line) {
     trait |= 0; value |= 0;
-    need16(line, 'line');
+    line = need16(line, 'line');
     const blocked = this.#blocked();
     if (blocked) return { result: blocked, token: new Uint8Array(16) };
     const r = new Record(OP.ISSUE_CONFIRM).i32(trait).i32(value).raw(line);
@@ -661,9 +672,10 @@ export class AnchorStore {
 
   issueRedefine(person, name, core, give, nameLen = name.length) {
     person |= 0; nameLen |= 0;
+    const nm = prefix(name, nameLen, NAME_MAX);
     const blocked = this.#blocked();
     if (blocked) return { result: blocked, token: new Uint8Array(16) };
-    const nm = prefix(name, nameLen, NAME_MAX), c = coreBytes(core, this.K), g = giveBytes(give, this.K);
+    const c = coreBytes(core, this.K), g = giveBytes(give, this.K);
     const r = new Record(OP.ISSUE_REDEFINE).i32(person);
     this.#definitionRecord(r, nm, nameLen, c, g);
     if (!this.sealed) return { result: this.#journal(r, E.STATE), token: new Uint8Array(16) };
@@ -676,7 +688,7 @@ export class AnchorStore {
 
   issueRecover(w, key, next) {
     w |= 0;
-    need32(key, 'key'); need32(next, 'next');
+    key = need32(key, 'key'); next = need32(next, 'next');
     const blocked = this.#blocked();
     if (blocked) return { result: blocked, token: new Uint8Array(16) };
     const r = new Record(OP.ISSUE_RECOVER).i32(w).raw(key).raw(next);
@@ -773,8 +785,9 @@ export class AnchorStore {
 
   verbatim(line, len = line.length) {
     len |= 0;
+    const bytes = prefix(line, len, LINE_MAX);
     if (!this.ready || len < 0 || len > LINE_MAX) return { result: -1, trait: -1, value: NONE };
-    const word = this.#verbatim(prefix(line, len, LINE_MAX), len);
+    const word = this.#verbatim(bytes, len);
     return word ? { result: 1, trait: word.trait, value: word.value } : { result: 0, trait: -1, value: NONE };
   }
 
@@ -832,7 +845,9 @@ export class AnchorStore {
     return E.OK;
   }
 
-  static #parse(b) {
+  static #parse(input) {
+    if (input.length > FILE_MAX) return LOAD.LONG;
+    const b = Uint8Array.from(input); // a copy: nothing loaded may alias the caller's buffer
     const len = b.length;
     if (len < 128) return LOAD.SHORT;
     if (b[0] !== 65 || b[1] !== 78 || b[2] !== 67 || b[3] !== 72 || b[4] !== 1 || b[5] !== 0) return LOAD.MAGIC;
@@ -854,13 +869,18 @@ export class AnchorStore {
     st.base = take(32); st.head = take(32);
     if (!has(1)) return LOAD.SHORT;
     const rc = g8();
-    if (rc > RING || rc > st.events) return LOAD.JOURNAL;
+    if (rc !== Math.min(st.events, RING)) return LOAD.JOURNAL;
     if (!has(16 * rc)) return LOAD.SHORT;
     st.ring = [];
     let fold = st.base;
-    for (let i = 0; i < rc; i++) { const e = take(16); st.ring.push(e); fold = sha256(concat(fold, e)); }
+    for (let i = 0; i < rc; i++) {
+      const e = take(16);
+      st.ring.push(e);
+      fold = sha256(concat(fold, e, u32le(st.events - rc + 1 + i)));
+    }
     if (!equal(fold, st.head)) return LOAD.JOURNAL;
     st.labels = [];
+    let labelCount = 0;
     for (let k = 0; k < K; k++) {
       if (!has(1)) return LOAD.SHORT;
       const c = g8();
@@ -874,10 +894,15 @@ export class AnchorStore {
         const t = take(l);
         if (!labelValid(t, l) || st.labels.some(x => x.some(y => equal(y, t))) || list.some(y => equal(y, t))) return LOAD.TRAIT;
         list.push(t);
+        labelCount++;
       }
       st.labels.push(list);
     }
     st.people = [{ defined: false, version: 0, name: new Uint8Array(0), core: new Int8Array(K), give: new Uint8Array(K), expressed: new Int8Array(K) }];
+    // What she expresses is at most floor(4 sigma + 1/2) steps from her core, and is her core exactly
+    // when she can never have voicesMin voices, or before any snapshot but the one at sealing.
+    const reach = Math.floor((8 * sn + sd) / (2 * sd));
+    let redefined = 0;
     for (let q = 1; q < n; q++) {
       if (!has(2)) return LOAD.SHORT;
       const version = g8(), nl = g8();
@@ -888,10 +913,12 @@ export class AnchorStore {
       if (!has(3 * K)) return LOAD.SHORT;
       const core = Int8Array.from(take(K), i8), give = take(K), expressed = Int8Array.from(take(K), i8);
       for (let k = 0; k < K; k++) {
-        const lo = core[k] - give[k], hi = core[k] + give[k], e = expressed[k];
+        const lo = core[k] - give[k], hi = core[k] + give[k], e = expressed[k], step = Math.abs(e - core[k]);
         if (core[k] < -2 || core[k] > 2 || give[k] > 2 || e < lo || e > hi || e < -2 || e > 2) return LOAD.PERSON;
+        if (step > reach || (step !== 0 && (n - 1 < m || (st.episodeNo === 0 && version === 1)))) return LOAD.PERSON;
       }
       st.people.push({ defined: true, version, name, core, give: Uint8Array.from(give), expressed });
+      redefined += version - 1;
     }
     {
       const probe = new AnchorStore();
@@ -904,7 +931,7 @@ export class AnchorStore {
     st.writers = [];
     const isCompanion = q => q >= 1 && q < n;
     const bindingOk = (ch, persona) => (ch === CHANNEL.USER ? persona === 0 : ch === CHANNEL.AGENT ? isCompanion(persona) : persona === NO_PERSONA);
-    let seqsum = 0;
+    let seqsum = 0, revoked = 0;
     for (let i = 0; i < wc; i++) {
       if (!has(WRITER_BYTES)) return LOAD.SHORT;
       const w = { channel: g8(), instance: g8(), root: g8(), persona: g8(), revoked: g8(), recovered: g8(), seq: g16() };
@@ -919,6 +946,7 @@ export class AnchorStore {
       if (!equal(writerIdOf(w.channel, w.instance, w.root, w.persona, w.key0, w.next0, i), w.id)) return LOAD.WRITER;
       if (st.writers.some(x => x.channel === w.channel && x.instance === w.instance)) return LOAD.WRITER;
       seqsum += w.seq;
+      revoked += w.revoked;
       st.writers.push(w);
     }
     const bound = [];
@@ -942,6 +970,10 @@ export class AnchorStore {
     const inUsed = d => st.used.some(x => equal(x, d));
     for (const w of st.writers) {
       if (!inUsed(w.key) || !inUsed(w.next) || !inUsed(w.key0) || !inUsed(w.next0)) return LOAD.USED;
+    }
+    // Each of these was an accepted journal entry.
+    if (st.events - st.refused < 2 + labelCount + (n - 1) + wc + seqsum + revoked + redefined + st.issued + st.episodeNo) {
+      return LOAD.COUNTER;
     }
     if (!has(1)) return LOAD.SHORT;
     const tc = g8();
@@ -974,6 +1006,9 @@ export class AnchorStore {
       if (cls < CLS.FIRST || cls > CLS.TOLD || value < -2 || value > 2 || level < 1 || level > LEVEL_MAX ||
           born > last || last > st.episodeNo) return LOAD.VIEW;
       if (was !== NONE && !(cls === CLS.FIRST && was >= -2 && was <= 2 && was !== value)) return LOAD.VIEW;
+      // A level falls by one each episode since it was last renewed; only the user's word stops at 1.
+      const ceiling = LEVEL_MAX - (st.episodeNo - last);
+      if (cls === CLS.FIRST && a === 0 ? level > 1 && level > ceiling : level > ceiling) return LOAD.VIEW;
       if (wset === 0 || (wset >> wc) !== 0) return LOAD.VIEW;
       const writersIn = st.writers.filter((_, i2) => (wset >> i2) & 1);
       if (cls === CLS.FIRST) {

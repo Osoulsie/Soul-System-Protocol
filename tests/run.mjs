@@ -7,7 +7,7 @@ import { createHash } from 'node:crypto';
 
 const root = new URL('../', import.meta.url);
 const path = p => new URL(p, root).pathname;
-const suites = ['sha256', 'lean', 'verbatim', 'scenarios', 'simoa', 'differential', 'bitflip', 'small'];
+const suites = ['sha256', 'lean', 'verbatim', 'scenarios', 'hardening', 'simoa', 'differential', 'bitflip', 'small'];
 const version = (cmd, args) => { try { return execFileSync(cmd, args, { encoding: 'utf8' }).split('\n')[0].trim(); } catch { return null; } };
 const record = {
   date: new Date().toISOString().slice(0, 10),

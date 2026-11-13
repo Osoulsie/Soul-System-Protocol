@@ -122,11 +122,25 @@ The store makes this decision itself, from the line. The host's parser supplies 
 
 ### 3.6 Consent
 
-A consent token is issued when the user is shown exactly what will happen. It is derived from the journal head, its kind (confirm, redefine, recover) and a digest of its exact target, and it lapses after 64 further journal entries. A presented token is spent whatever the outcome. A token of one kind is refused for another, and a token for one target is refused for any other.
+A consent token is issued when the user is shown exactly what will happen. It is derived from the journal head, its kind (confirm, redefine, recover) and a digest of its exact target. It can be spent while at most 64 journal entries lie between the entry that issued it and the entry that spends it. A presented token is spent whatever the outcome. A token of one kind is refused for another, and a token for one target is refused for any other.
 
 ### 3.7 The journal and the saved file
 
-Every mutating call after initialisation writes exactly one 16-byte journal entry, whether it was accepted or refused: the operation, the result byte, and the first 14 bytes of SHA-256 over the operation's arguments. The one exception is a store whose event counter is spent (2³² − 1 entries), which refuses everything and writes nothing. The head moves by `h ← SHA-256(h ‖ entry)`. The store keeps the last 32 entries and folds older ones into a base digest. The saved file (Appendix A) ends with SHA-256 of everything before it, and the loader checks every invariant in this paper before it changes anything.
+Every mutating call after initialisation writes exactly one 16-byte journal entry, whether it was accepted or refused: the operation, the result byte, and the first 14 bytes of SHA-256 over the operation's arguments. The one exception is a store whose event counter is spent (2³² − 1 entries), which refuses everything and writes nothing. A refused initialisation changes nothing at all.
+
+The head moves by `h ← SHA-256(h ‖ entry ‖ index)`, where the index is the entry's position, so a head kept elsewhere also fixes how many entries there have been. The store keeps the last 32 entries and folds older ones, with their positions, into a base digest.
+
+The saved file (Appendix A) is at most 146,913 bytes and ends with SHA-256 of everything before it. Before it changes anything, the loader checks every invariant in this paper that can be checked from the saved state alone:
+
+- ranges, bands and distances
+- that what each companion expresses is within reach of her core
+- that the ring holds the last `min(events, 32)` entries and folds to the head
+- that the counters account for every accepted act
+- that no level exceeds what the episodes since it was last renewed allow
+- that identities recompute and no digest is bound twice
+- every class rule for views
+
+What it cannot check is listed in section 10.
 
 ## 4. Companions: what the rule guarantees
 
@@ -210,11 +224,13 @@ A host that lost its keys therefore cannot make a second identity for the same d
 
 **Proposition C1 (the user's word is exact).** If companion H holds a live FIRST view about the user on k, its value is the last *word* on k that H received: a verbatim line or a confirmed reading. Nothing else changes it.
 
-*Proof.* FIRST views about the user are admitted only from a verbatim line or a confirmation. A READ or TOLD view cannot take a slot holding a live FIRST view. Fading changes the level and never drops the user's FIRST views. Forgetting removes the view, and revoking the user's writer makes it fall. A later word replaces it and keeps the old value as "before". ∎
+*Proof.* FIRST views about the user are admitted only from a verbatim line or a confirmation. A READ or TOLD view cannot take a slot holding a live FIRST view. Fading changes the level and never drops the user's FIRST views. Forgetting removes the view, because forgetting is the user's own request and covers their word too. Revoking the user's writer makes it fall. A later word replaces it and keeps the old value as "before". ∎
 
 **Proposition C2 (a reading is not a word).** A user line that is not verbatim yields at most a READ view at authority 1. It never replaces a live word, is never a voice, and becomes a word only by the user's yes to that trait, value and line.
 
 *Proof.* Sections 3.2, 3.3 and 3.6. ∎
+
+A confirmed word stands on the writer that confirmed it, not on the one that wrote the line. Like the user's yes in the min-caps paper (its section 4.1), it is the user's own record with no authority parents. A reading whose writer has been revoked has fallen and cannot be confirmed.
 
 **Proposition C3 (a word is literal, and names one thing).** A line is the word `(k, v)` exactly when its normalisation equals `"i " + verb(v) + " " + label` for a label of k. No line is two words.
 
@@ -281,7 +297,7 @@ Unknown subjects get a derived opinion in 10.15.0. Here every trait is declared 
 | `src/anchor.h`, `src/anchor.c` | the store: freestanding C17, no library, no allocation |
 | `src/sha256.c` | SHA-256 |
 | `src/wasm.c` | one store and a scratch area per WebAssembly instance |
-| `dist/anchor.wasm` | 48,328 bytes, no imports, reproducible: SHA-256 `eaca3c9a691f8868ba27a6117e744a2ba5be490dd7bb19ce849f2c1097937cf0` with clang 18.1.3 and `./build.sh` |
+| `dist/anchor.wasm` | 49,084 bytes, no imports, reproducible: SHA-256 `bb302b218ce6bd2910c1d156e4225d961113141e7733e57fb5c9154dd29b649b` with clang 18.1.3 and `./build.sh` |
 | `oracle/anchor.mjs`, `oracle/sha256.mjs` | the independent JavaScript implementation; no dependencies; runs in a browser |
 | `host/anchor-wasm.mjs` | a binding for the WebAssembly with the oracle's interface |
 
@@ -298,21 +314,22 @@ No claim here is machine-checked. Each rests on a proof written above or on a te
 | A1, A2, A6, A7, A8; B1, B5, B6; C1, C2, C4 in the code | exhaustive test, small cases | every history of up to four events over 16 events (69,905 histories, 274,960 steps) in a world of two companions and five writers: after every step the band, the distance, unchanged cores, unchanged expression inside an episode, the snapshot equal to the rule, current views in band, the user's word equal to a shadow model kept by the test, exact retellings (1,014), confirmations (2,235), stable ids, key sequences and revocations |
 | The same, at scale | random test | 12 seeds × 4,000 steps (51,944 calls, 7,151 hostile) in a world of three companions and six of Simoa's topics: band and distance after every step, current views in band every 25 steps |
 | The verbatim gate | generated test | 2,190 lines (928 words in 14 spellings, 1,262 near misses) checked three ways (C, JavaScript, a regular-expression reference); 40,000 byte-level mutations, C equals JavaScript |
+| The findings of the review below | regression tests | 11 checks in `tests/hardening.test.mjs`, including every table filled to capacity: the file is then exactly 146,913 bytes, reloads to the same bytes, and one more writer or key event is refused |
 | Named attacks | scenario tests | 24, each run in both implementations: persona injection, one persistent voice, echoes, two voices for 200 conversations, restoration three ways, self-echo, out of character, impersonation, blur under maximum pull, consent (missing, wrong writer, other change, reuse, lapse), blur by redefinition, rotation, key theft, a reload that lost its keys, retired-key reuse, model switch, revocation across keys, degree change, readings, confirmation (wrong value, wrong writer, wrong kind, reuse), exact retelling, hearsay, the user's word after 1,000 episodes, authority along retellings |
 | C and JavaScript agree | differential test | after every one of 51,944 calls: the same result and the same journal head; the same saved bytes; cross-loading each other's files; three histories frozen as vectors |
 | Save and reload change nothing | differential test | 180 reloaded stores ran 11,673 calls in lockstep with the originals, with identical results and heads; all 69,905 small histories and 619 native round trips reload to identical bytes |
-| A saved file takes nothing on trust | bit-flip test | all 18,968 single-bit changes to one 2,371-byte file refused as they are, by both, with the same codes; with the digest recomputed, 17,080 refused and 1,632 accepted, listed below |
+| A saved file takes nothing on trust | bit-flip test | all 18,968 single-bit changes to one 2,371-byte file refused as they are, by both, with the same codes; with the digest recomputed, 17,167 refused and 1,545 accepted, listed below |
 | Memory safety | sanitizers | 60,000 native steps (13,719 statements, 12,080 user lines, 8,389 retellings, 4,242 confirmations, 274 rotations, 222 recoveries, 357 redefinitions accepted) under AddressSanitizer and UndefinedBehaviorSanitizer, 619 reloads, every truncation of a saved file, 4,000 corruptions, 2,000 garbage files: no report |
 | SHA-256 | known answers, random test | the FIPS examples and one million 'a' (native); 3,308 random messages up to 200,000 bytes, C equals JavaScript equals node:crypto |
 | Simoa's table | fixture from the shipped bundle | distances 14, 9, 9; 2,000 conversations (24,000 lines): no companion ever more than one step from her core, cores unchanged, every pair above its distance |
 
-**What the bit flips show.** With the trailing digest recomputed, a change is refused when it breaks a rule the loader can check, and that covers 91% of them. The 1,632 accepted ones fell in the following fields:
+**What the bit flips show.** With the trailing digest recomputed, a change is refused when it breaks a rule the loader can check, and that covers 92% of them. The 1,545 accepted ones fell in the following fields:
 
 - line identifiers (768), token targets and values (384)
-- counters (79), view levels and episodes (58)
-- labels (139), names and versions (129)
+- counters (7), view levels and episodes (58)
+- labels (139), names and versions (114)
 - parameters (16)
-- core (5), give (12) and expressed (5) values that keep every band and distance
+- core (5), give (12) and expressed (5) values that keep every band, distance and reach
 - view values (8)
 - the remaining 29 in views' "before" values and places, writer status, and token kinds and times
 
@@ -320,7 +337,18 @@ Each is a state the rule allows, which the digest alone binds. Someone who can r
 
 **What a differential test does not show.** Two implementations written by one author from one description can share a misunderstanding. The exhaustive tests against the exact-rational reference, the regular-expression reference and the shadow model are what tie the code to the rule, and they stop at the sizes given.
 
-**Not done.** A machine-checked proof. Integration into Simoa and a test in its browser UI. Any test on a phone. Review by anyone other than the author.
+**Review.** A second reader was given the code and the guarantees, but not this paper or the author's conclusions. It was a separate model instance, not a person. It found six defects:
+
+1. The JavaScript implementation kept views of Node `Buffer` arguments instead of copies, so a caller reusing a buffer changed its state.
+2. The loader accepted forged states the rule cannot reach: an expression no evidence supports, a level that time would have worn down, a short journal ring, and impossible counters.
+3. The WebAssembly binding answered differently from C for oversized files.
+4. The binding's test-only `lean` wrote out of bounds for oversized input.
+5. Short byte buffers on an uninitialised store threw an error in one implementation and returned a code in the other.
+6. A refused initialisation wiped a live store.
+
+It also asked about two other points. The exact lapse boundary is now stated and tested at 64 and 65 entries. The event count is now bound into the journal chain. All of these are fixed and have regression tests. Its other questions are answered in sections 6 and 11.
+
+**Not done.** A machine-checked proof. Integration into Simoa and a test in its browser UI. Any test on a phone. Review by a person other than the author.
 
 ## 11. Limits
 
@@ -331,6 +359,8 @@ Each is a state the rule allows, which the digest alone binds. Someone who can r
 - **The verbatim gate is English and strict.** Six verbs, ASCII labels, no intensifiers ("I really love tea" is a reading). Everything else needs the user's yes, which needs a place in the interface.
 - **Line identifiers are not secret.** A short line can be found from its identifier by guessing. The store keeps no line text, but its identifiers are not a privacy measure.
 - **A file-level attacker who recomputes the digest** can make any change the rules allow (section 10). Pin `an_definition()`, the fingerprints and the journal head outside the device, as the min-caps paper's seal does for its journal.
+- **Single use and lapse hold within one history.** Restoring an older saved file brings back the tokens spent since, and everything else as it was. Detecting a rollback needs the journal head, which now also fixes the entry count, or the last file's digest kept outside the device.
+- **What she expresses is checked on load only against what is reachable.** The evidence behind the last snapshot is not kept, so a rewritten file can set it to any value within reach of the core.
 - **Only stances and names are identity here.** How a language model words her replies, her style, her backstory, and anything not declared as a trait are not modelled. The rule gates what she states about her declared traits.
 - **Revocation takes effect on expression at the next episode.** Within a conversation the snapshot stands; the host can start a new episode at once.
 - **It does not reach the 10.8.0 kernel's learner**, whose shared prior across the three companions is in the 10.15.0 gap log. That needs the kernel source.
@@ -364,6 +394,8 @@ All integers little-endian. Fields in order:
 | token count, then per token: kind, issued (u32), target (32), token (16) | 1 + 53·t |
 | view count (u16), then per view in (holder, about, trait) order: holder, about, trait, class, depth, authority, level, core version, value, before, made (u16), renewed (u16), writers (u16), line (16) | 2 + 32·v |
 | SHA-256 of all the above | 32 |
+
+With every table full the file is 146,913 bytes (`AN_FILE_MAX`); a longer input is refused before it is read.
 
 ## Appendix B. Interface
 

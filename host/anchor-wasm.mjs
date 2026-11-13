@@ -128,9 +128,14 @@ export class WasmAnchorStore {
     const result = this.x.an_line_id(this.#put(A, line, len | 0, 512), len, this.base + OUT);
     return result === 0 ? this.#out(16) : null;
   }
+  // Arguments C cannot represent (more than seven voices, values outside int8, levels outside uint8,
+  // mismatched lengths) are refused here as the oracle refuses them, without touching memory.
   lean(core, give, values, levels, sn, sd, sat, m) {
+    const fits = (v, lo, hi) => Number.isInteger(v) && v >= lo && v <= hi;
+    if (values.length > 7 || levels.length !== values.length || !values.every(v => fits(v, -128, 127)) ||
+        !levels.every(l => fits(l, 0, 255))) return -128;
     const b = this.#bytes();
-    for (let i = 0; i < values.length; i++) { b[this.base + A + i] = values[i] & 255; b[this.base + B + i] = levels[i] & 255; }
+    for (let i = 0; i < values.length; i++) { b[this.base + A + i] = values[i] & 255; b[this.base + B + i] = levels[i]; }
     return this.x.an_lean(core, give, values.length, this.base + A, this.base + B, sn, sd, sat, m);
   }
 
@@ -148,7 +153,7 @@ export class WasmAnchorStore {
     return { result, bytes: result > 0 ? this.#bytes().slice(this.base, this.base + result) : new Uint8Array(0) };
   }
   load(bytes) {
-    if (bytes.length > this.size) return -20;
+    if (bytes.length > this.size) return -32; // longer than any file (AN_L_LONG), as C would answer
     this.#bytes().set(bytes, this.base);
     return this.x.an_load(this.s, this.base, bytes.length);
   }

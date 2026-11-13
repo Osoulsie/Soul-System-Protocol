@@ -33,7 +33,8 @@
 #define AN_LEVEL_NEW 8
 #define AN_LEVEL_REPEAT 4
 #define AN_LEVEL_MAX 16
-#define AN_LAPSE 64      /* a consent token lapses after this many further journal entries */
+#define AN_LAPSE 64      /* a consent token can be spent while at most this many journal entries lie
+                            between the entry that issued it and the entry that spends it */
 #define AN_NONE (-128)   /* "no value" in queries and in the `was` field */
 
 /* Channels (doors). Capacity: external 0, agent 1, user/tool/system 2. */
@@ -76,6 +77,10 @@
 #define AN_E_FULL (-13)     /* a table or counter is exhausted */
 #define AN_E_LISTENERS (-14)/* the listener set is empty or names someone who cannot hold this view */
 
+/* The largest file a store can save: header 92, ring 1+32*16, labels 64*(1+4*33), companions
+ * 7*(2+24+3*64), writers 1+16*168, bound digests 2+1024*32, tokens 1+8*53, views 2+3136*32, digest 32. */
+#define AN_FILE_MAX 146913
+
 /* Loader refusals. */
 #define AN_L_SHORT (-20)
 #define AN_L_MAGIC (-21)
@@ -89,6 +94,7 @@
 #define AN_L_USED (-29)
 #define AN_L_TOKEN (-30)
 #define AN_L_VIEW (-31)
+#define AN_L_LONG (-32)
 
 /* Journal operation codes. */
 #define AN_OP_INIT 1

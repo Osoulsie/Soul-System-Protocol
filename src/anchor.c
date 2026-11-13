@@ -98,9 +98,23 @@ static void r_begin(rec_t *r, int op) {
   r_i32(r, 0); /* the result, filled in by journal() */
 }
 
-/* Entry = op, result byte, first 14 bytes of SHA-256(record). head <- SHA-256(head || entry). */
+/* Entry = op, result byte, first 14 bytes of SHA-256(record).
+ * head <- SHA-256(head || entry || index), where index is the entry's position (1, 2, ...), so a head
+ * kept elsewhere also fixes how many entries there have been. The oldest kept entry is folded into the
+ * base the same way when the ring is full. */
+static void chain(uint8_t acc[32], const uint8_t e[16], uint32_t index) {
+  uint8_t buf[52];
+  cp(buf, acc, 32);
+  cp(buf + 32, e, 16);
+  buf[48] = (uint8_t)index;
+  buf[49] = (uint8_t)(index >> 8);
+  buf[50] = (uint8_t)(index >> 16);
+  buf[51] = (uint8_t)(index >> 24);
+  an_sha256(buf, 52, acc);
+}
+
 static int journal(an_store *s, rec_t *r, int result) {
-  uint8_t d[32], e[16], buf[48];
+  uint8_t d[32], e[16];
   uint32_t u = (uint32_t)result;
   r->b[1] = (uint8_t)u;
   r->b[2] = (uint8_t)(u >> 8);
@@ -111,17 +125,13 @@ static int journal(an_store *s, rec_t *r, int result) {
   e[1] = (uint8_t)u;
   cp(e + 2, d, 14);
   if (s->ring_count == AN_RING) {
-    cp(buf, s->base, 32);
-    cp(buf + 32, s->ring[s->ring_first], 16);
-    an_sha256(buf, 48, s->base);
+    chain(s->base, s->ring[s->ring_first], s->events - AN_RING + 1u);
     s->ring_first = (uint8_t)((s->ring_first + 1) % AN_RING);
     s->ring_count--;
   }
   cp(s->ring[(s->ring_first + s->ring_count) % AN_RING], e, 16);
   s->ring_count++;
-  cp(buf, s->head, 32);
-  cp(buf + 32, e, 16);
-  an_sha256(buf, 48, s->head);
+  chain(s->head, e, s->events + 1u);
   s->events++;
   if (result < 0 && s->refused != 0xFFFFFFFFu) s->refused++;
   return result;
@@ -502,11 +512,12 @@ static int spend(an_store *s, int kind, const uint8_t target[32], const uint8_t 
 int an_init(an_store *s, int persons, int traits, int sigma_num, int sigma_den, int saturation,
             int voices_min, int distinct_min) {
   rec_t r;
-  zero(s, (unsigned)sizeof(an_store));
+  /* Invalid arguments change nothing; valid ones start a new, empty store. */
   if (persons < 2 || persons > AN_PERSONS || traits < 1 || traits > AN_TRAITS || sigma_den < 1 ||
       sigma_den > 100 || sigma_num < 0 || sigma_num > sigma_den || saturation < 1 || saturation > 64 ||
       voices_min < 2 || voices_min > 7 || distinct_min < 1 || distinct_min > 255)
     return AN_E_ARG;
+  zero(s, (unsigned)sizeof(an_store));
   s->persons = (uint8_t)persons;
   s->traits = (uint8_t)traits;
   s->sigma_num = (uint8_t)sigma_num;
@@ -1309,8 +1320,11 @@ int an_save(const an_store *s, uint8_t *out, int cap) {
   return n + 32;
 }
 
-/* The loader takes nothing on trust. It checks every range and every invariant the rule
- * maintains, in file order, into a staging store, and changes the target only on success. */
+/* The loader takes nothing on trust. It checks, in file order and into a staging store, every range
+ * and every invariant that can be checked from the saved state alone, and changes the target only on
+ * success. What cannot be checked from the state alone (which evidence stood behind the last snapshot,
+ * retired key digests, line identifiers, token targets) is bound by the trailing digest only; keep the
+ * file's digest, the journal head and an_definition() outside the device to detect a rewritten file. */
 static an_store an_stage;
 
 typedef struct {
@@ -1343,9 +1357,10 @@ static int in_band(const an_person *x, int k, int v) {
 int an_load(an_store *s, const uint8_t *in, int len) {
   an_store *t = &an_stage;
   rd_t r;
-  uint8_t d[32], buf[48];
+  uint8_t d[32];
   int i, j, k, p, n, K, sn, sd, sat, m, delta, rc, wc, uc, tc, vc, prev;
-  uint32_t seqsum = 0;
+  uint32_t seqsum = 0, revoked = 0, labels = 0, redefined = 0, reach;
+  if (len > AN_FILE_MAX) return AN_L_LONG;
   if (len < 128) return AN_L_SHORT;
   if (in[0] != 'A' || in[1] != 'N' || in[2] != 'C' || in[3] != 'H' || in[4] != 1 || in[5] != 0)
     return AN_L_MAGIC;
@@ -1369,17 +1384,16 @@ int an_load(an_store *s, const uint8_t *in, int len) {
   if (t->refused > t->events) return AN_L_COUNTER;
   gbytes(&r, t->base, 32);
   gbytes(&r, t->head, 32);
-  /* journal */
+  /* journal: the ring holds the last min(events, 32) entries, and folding them, with their positions,
+   * onto the base gives the head */
   if (!need(&r, 1)) return AN_L_SHORT;
   rc = g8(&r);
-  if (rc > AN_RING || (uint32_t)rc > t->events) return AN_L_JOURNAL;
+  if ((uint32_t)rc != (t->events < AN_RING ? t->events : (uint32_t)AN_RING)) return AN_L_JOURNAL;
   if (!need(&r, 16 * rc)) return AN_L_SHORT;
   cp(d, t->base, 32);
   for (i = 0; i < rc; i++) {
     gbytes(&r, t->ring[i], 16);
-    cp(buf, d, 32);
-    cp(buf + 32, t->ring[i], 16);
-    an_sha256(buf, 48, d);
+    chain(d, t->ring[i], t->events - (uint32_t)rc + 1u + (uint32_t)i);
   }
   if (!same(d, t->head, 32)) return AN_L_JOURNAL;
   t->ring_first = 0;
@@ -1401,9 +1415,13 @@ int an_load(an_store *s, const uint8_t *in, int len) {
       x->len[j] = (uint8_t)l;
       gbytes(&r, x->text[j], l);
       x->count++;
+      labels++;
     }
   }
-  /* persons */
+  /* persons. What she expresses can be at most `reach` steps from her core: |u - c| <= 4*sigma, so
+   * |round(u) - c| <= floor(4*sigma + 1/2). With fewer possible voices than voices_min, or before any
+   * snapshot other than the one at sealing (episode 0, version 1), it is her core exactly. */
+  reach = (uint32_t)((8 * sn + sd) / (2 * sd));
   for (p = 1; p < n; p++) {
     an_person *x = &t->person[p];
     int nl;
@@ -1419,10 +1437,16 @@ int an_load(an_store *s, const uint8_t *in, int len) {
     for (k = 0; k < K; k++) x->core[k] = (int8_t)s8(g8(&r));
     for (k = 0; k < K; k++) x->give[k] = (uint8_t)g8(&r);
     for (k = 0; k < K; k++) x->expressed[k] = (int8_t)s8(g8(&r));
-    for (k = 0; k < K; k++)
+    for (k = 0; k < K; k++) {
+      int step = x->expressed[k] - x->core[k];
       if (x->core[k] < -2 || x->core[k] > 2 || x->give[k] > 2 || !in_band(x, k, x->expressed[k]))
         return AN_L_PERSON;
+      if (step < 0) step = -step;
+      if ((uint32_t)step > reach || (step != 0 && (n - 1 < m || (t->episode == 0 && x->version == 1))))
+        return AN_L_PERSON;
+    }
     x->defined = 1;
+    redefined += (uint32_t)(x->version - 1);
   }
   if (!definitions_distinct(t)) return AN_L_PERSON;
   /* writers */
@@ -1459,6 +1483,7 @@ int an_load(an_store *s, const uint8_t *in, int len) {
       if (t->writer[j].channel == w->channel && t->writer[j].instance == w->instance)
         return AN_L_WRITER;
     seqsum += w->seq;
+    revoked += w->revoked;
   }
   t->writer_count = (uint8_t)wc;
   /* no digest is bound to two identities, nor twice to one */
@@ -1496,6 +1521,11 @@ int an_load(an_store *s, const uint8_t *in, int len) {
         !used_has(t, w->next0))
       return AN_L_USED;
   }
+  /* Every one of these was an accepted journal entry: init, each label, each definition, the seal,
+   * each inception, rotation, recovery, revocation, redefinition, token issued and episode counted. */
+  if ((uint64_t)t->events - t->refused < (uint64_t)2u + labels + (uint32_t)(n - 1) + (uint32_t)wc + seqsum +
+                                              revoked + redefined + t->issued + t->episode)
+    return AN_L_COUNTER;
   /* tokens */
   if (!need(&r, 1)) return AN_L_SHORT;
   tc = g8(&r);
@@ -1536,6 +1566,10 @@ int an_load(an_store *s, const uint8_t *in, int len) {
         level > AN_LEVEL_MAX || born > last || last > t->episode)
       return AN_L_VIEW;
     if (was != AN_NONE && !(cls == AN_FIRST && was >= -2 && was <= 2 && was != value)) return AN_L_VIEW;
+    /* A level falls by one each episode since it was last renewed; only the user's word stops at 1. */
+    if (cls == AN_FIRST && a == 0 ? level > 1 && level > AN_LEVEL_MAX - (t->episode - last)
+                                  : level > AN_LEVEL_MAX - (t->episode - last))
+      return AN_L_VIEW;
     if (wset == 0 || (wset >> wc) != 0) return AN_L_VIEW;
     if (cls == AN_FIRST) {
       if (depth != 0 || auth != (a == 0 ? 2 : 1)) return AN_L_VIEW;
