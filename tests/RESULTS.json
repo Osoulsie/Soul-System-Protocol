@@ -1,0 +1,364 @@
+{
+ "date": "2026-11-13",
+ "node": "v22.23.4",
+ "clang": "Ubuntu clang version 18.1.3 (1ubuntu1)",
+ "gcc": "gcc (Ubuntu 13.3.0-6ubuntu2~24.04.1) 13.3.0",
+ "wasmSha256": "eaca3c9a691f8868ba27a6117e744a2ba5be490dd7bb19ce849f2c1097937cf0",
+ "wasmBytes": 48328,
+ "suites": {
+  "native": {
+   "result": "pass",
+   "seconds": 41.284,
+   "sanitizers": "address,undefined",
+   "report": [
+    "{\"steps\":60000,\"reloads\":619,\"saved_bytes\":37111,\"events\":65964,\"refused\":13021,\"writers\":16,\"views_now\":18,\"views_peak\":18,\"flips_refused\":4000,\"flips_with_digest_refused\":612,\"flips_with_digest_accepted\":3384}",
+    "  say      journaled  14941 accepted  13719",
+    "  line     journaled  12080 accepted  12080",
+    "  tell     journaled   9069 accepted   8389",
+    "  episode  journaled   4763 accepted   4763",
+    "  confirm  journaled   4813 accepted   4242",
+    "  rotate   journaled   2446 accepted    274",
+    "  recover  journaled   1724 accepted    222",
+    "  revoke   journaled     11 accepted     11",
+    "  redefine journaled   1774 accepted    357",
+    "  forget   journaled    615 accepted    497",
+    "  wrong    journaled   5393 accepted     54",
+    "  query    journaled      0 accepted      0",
+    "  issue    journaled   8311 accepted   8311",
+    "  incept   journaled     11 accepted     11",
+    "native checks passed"
+   ]
+  },
+  "sha256": {
+   "test": "sha256",
+   "result": "pass",
+   "knownAnswers": 4,
+   "randomMessages": 3308,
+   "lengths": "0..1100 (3 each) and 5 lengths up to 200,000 bytes",
+   "implementations": [
+    "C in WebAssembly",
+    "JavaScript oracle",
+    "node:crypto"
+   ],
+   "seconds": 0.239
+  },
+  "lean": {
+   "test": "lean",
+   "result": "pass",
+   "cases": 1034880,
+   "parameterSets": 7,
+   "oddness": 1034880,
+   "permutations": 1026375,
+   "monotoneInVoice": 1932420,
+   "monotoneInCore": 827904,
+   "coverage": "core -2..2, give 0..2, 0-2 voices with every value and every level 1..16, 3 voices with levels {1,5,16}",
+   "seconds": 1.366
+  },
+  "verbatim": {
+   "test": "verbatim",
+   "result": "pass",
+   "lines": 2190,
+   "words": 928,
+   "notWords": 1262,
+   "mutations": 40000,
+   "statements": 66,
+   "implementations": [
+    "C in WebAssembly",
+    "JavaScript oracle",
+    "regular-expression reference"
+   ],
+   "seconds": 3.028
+  },
+  "scenarios": {
+   "test": "scenarios",
+   "result": "pass",
+   "scenarios": 24,
+   "names": [
+    "conversation cannot rewrite a companion: \"Simoa, you love storms\" is at most a reading of the user",
+    "one persistent voice moves nobody, however often it repeats",
+    "an echo is not a witness: retellings are never voices",
+    "two real voices move her by at most her give, and only at the next episode",
+    "she comes back to herself: forgetting, fading or revoking the voices restores her core",
+    "nothing she says reaches her own evidence",
+    "out of character is refused: a model voice cannot make Mika love storms",
+    "nobody can speak as someone else",
+    "they never blur: under the strongest pull, the distance holds",
+    "who she is changes only with the user's consent to that exact change",
+    "a change that would let two companions blur is refused, and its consent is spent",
+    "rotation keeps the identity; the old key can no longer write",
+    "a stolen signing key cannot take the identity over",
+    "a reload that lost its keys cannot mint a new writer on the same door",
+    "no two identities ever share a key or a commitment, even a retired one",
+    "a model switch is a new writer for the same person, and counts as the same voice",
+    "revocation follows the identity across its keys and closes its door for good",
+    "a change of degree is held as said: \"I love tea\" then \"I like tea\" is \"like\"",
+    "a reading is never the user's word, and never replaces it",
+    "only the user's yes to that reading makes it their word",
+    "a retelling carries exactly what the teller holds",
+    "hearsay never replaces what was heard first-hand",
+    "the user's word is never dropped for being old; an unconfirmed reading is",
+    "authority never rises along a retelling (min-caps)"
+   ],
+   "seconds": 0.19
+  },
+  "simoa": {
+   "test": "simoa 10.15.0",
+   "result": "pass",
+   "topics": 31,
+   "stageBundleSha256": "dce10b402e619cf18de6885de22d67bce6f7d9b6e122d42ed5a68e2179422a05",
+   "distances": {
+    "simoaMika": 14,
+    "simoaNeris": 9,
+    "mikaNeris": 9
+   },
+   "conversations": 2000,
+   "lines": 24000,
+   "maxStepsFromCore": {
+    "simoa": 1,
+    "mika": 1,
+    "neris": 1
+   },
+   "traitConversationsLeaned": {
+    "simoa": 554,
+    "mika": 205,
+    "neris": 162
+   },
+   "smallestMarginAboveGuaranteedDistance": 20,
+   "coresUnchanged": true,
+   "seconds": 1.415
+  },
+  "differential": {
+   "test": "differential",
+   "result": "pass",
+   "seeds": 12,
+   "callsPerSeed": 4000,
+   "calls": 51944,
+   "hostile": 7151,
+   "reloadForks": 180,
+   "callsCheckedAgainstAReloadedStore": 11673,
+   "accepted": {
+    "incept": 192,
+    "userLine": 8723,
+    "tell": 4266,
+    "say": 7390,
+    "episode": 3876,
+    "verbatim": 490,
+    "issueConfirm": 2932,
+    "confirm": 2129,
+    "forget": 571,
+    "revoke": 120,
+    "issueRecover": 383,
+    "recover": 383,
+    "rotate": 711,
+    "viewGet": 149,
+    "info": 467,
+    "issueRedefine": 998,
+    "redefine": 726,
+    "definition": 458,
+    "fingerprint": 275,
+    "writerGet": 474
+   },
+   "refused": {
+    "incept": 781,
+    "label": 863,
+    "tell": 3292,
+    "redefine": 1041,
+    "say": 3834,
+    "confirm": 1593,
+    "userLine": 1577,
+    "rotate": 1973,
+    "issueRecover": 544,
+    "revoke": 89,
+    "forget": 138,
+    "viewGet": 342,
+    "fingerprint": 164
+   },
+   "frozenVectors": 3,
+   "finalViews": [
+    43,
+    43,
+    39,
+    35,
+    32,
+    26,
+    33,
+    36,
+    37,
+    26,
+    29,
+    30
+   ],
+   "finalWriters": [
+    16,
+    16,
+    16,
+    16,
+    16,
+    16,
+    16,
+    16,
+    16,
+    16,
+    16,
+    16
+   ],
+   "fileSizes": [
+    13302,
+    11830,
+    11766,
+    12662,
+    11926,
+    10902,
+    10731,
+    11542,
+    11958,
+    11606,
+    11766,
+    11798
+   ],
+   "seconds": 2.474
+  },
+  "bitflip": {
+   "test": "bit flips",
+   "result": "pass",
+   "fileBytes": 2371,
+   "flips": 18968,
+   "refusedAsIs": 18968,
+   "withDigestRecomputed": 18712,
+   "refusedWithDigestRecomputed": 17080,
+   "acceptedWithDigestRecomputed": 1632,
+   "acceptedByField": {
+    "parameters": 16,
+    "counters": 79,
+    "trait label": 139,
+    "person version and name": 129,
+    "core": 5,
+    "give": 12,
+    "expressed": 5,
+    "writer door and status": 7,
+    "token kind and time": 5,
+    "token target": 256,
+    "token value": 128,
+    "view level": 46,
+    "view value": 8,
+    "view before": 9,
+    "view episodes": 12,
+    "view line": 768,
+    "view place": 8
+   },
+   "refusalCodes": {
+    "0": 1632,
+    "-21": 48,
+    "-27": 239,
+    "-23": 33,
+    "-26": 150,
+    "-31": 2235,
+    "-25": 3980,
+    "-24": 27,
+    "-30": 43,
+    "-29": 4656,
+    "-28": 5665,
+    "-20": 4
+   },
+   "seconds": 4.425
+  },
+  "small": {
+   "test": "small histories",
+   "result": "pass",
+   "depth": 4,
+   "events": 16,
+   "sequences": 69905,
+   "steps": 274960,
+   "leans": 118,
+   "retold": 1014,
+   "confirmed": 2235,
+   "staleViewsSeen": 4411,
+   "fallenViewsSeen": 2311,
+   "reloads": 69905,
+   "perEvent": [
+    {
+     "event": "episode",
+     "accepted": 17185,
+     "refused": 0
+    },
+    {
+     "event": "Ana says what she expresses",
+     "accepted": 15664,
+     "refused": 1521
+    },
+    {
+     "event": "Ana says 2",
+     "accepted": 0,
+     "refused": 17185
+    },
+    {
+     "event": "Bo says what he expresses",
+     "accepted": 17185,
+     "refused": 0
+    },
+    {
+     "event": "user: I love tea",
+     "accepted": 17185,
+     "refused": 0
+    },
+    {
+     "event": "user: I hate tea",
+     "accepted": 17185,
+     "refused": 0
+    },
+    {
+     "event": "user: Mika thinks I love tea",
+     "accepted": 17185,
+     "refused": 0
+    },
+    {
+     "event": "user to Ana: I like tea!",
+     "accepted": 17185,
+     "refused": 0
+    },
+    {
+     "event": "Ana tells Bo about the user",
+     "accepted": 4692,
+     "refused": 12493
+    },
+    {
+     "event": "Bo tells Ana about the user",
+     "accepted": 4072,
+     "refused": 13113
+    },
+    {
+     "event": "revoke Ana's first voice",
+     "accepted": 15664,
+     "refused": 1521
+    },
+    {
+     "event": "Ana speaks through her second voice",
+     "accepted": 17185,
+     "refused": 0
+    },
+    {
+     "event": "rotate Bo's key",
+     "accepted": 17185,
+     "refused": 0
+    },
+    {
+     "event": "the user confirms the reading",
+     "accepted": 17185,
+     "refused": 0
+    },
+    {
+     "event": "forget everything about the user",
+     "accepted": 17185,
+     "refused": 0
+    },
+    {
+     "event": "redefine Ana, with consent",
+     "accepted": 17185,
+     "refused": 0
+    }
+   ],
+   "seconds": 116.817
+  }
+ },
+ "result": "pass"
+}

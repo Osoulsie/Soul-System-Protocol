@@ -1,0 +1,292 @@
+{
+ "source": "Simoa 10.15.0 (distribution revision 10.15.0-h1), stage bundle embedded in index.html as <script id=\"simoa-stage\">",
+ "stage_bundle_sha256": "dce10b402e619cf18de6885de22d67bce6f7d9b6e122d42ed5a68e2179422a05",
+ "extracted": "2026-11-13, from the bundle's crew-talk topic table (each topic's stance for Simoa, Mika and Neris)",
+ "order": [
+  "simoa",
+  "mika",
+  "neris"
+ ],
+ "rule_10_15_0": "A view of her own moves at most one step from her nature, and a nature of -2 or 2 never moves (stage memory lean()).",
+ "topics": [
+  {
+   "id": "archive",
+   "label": "the archive",
+   "stance": [
+    2,
+    0,
+    1
+   ]
+  },
+  {
+   "id": "workshop",
+   "label": "the workshop",
+   "stance": [
+    1,
+    2,
+    0
+   ]
+  },
+  {
+   "id": "storms",
+   "label": "storms",
+   "stance": [
+    -1,
+    -2,
+    2
+   ]
+  },
+  {
+   "id": "rain",
+   "label": "rain",
+   "stance": [
+    1,
+    1,
+    2
+   ]
+  },
+  {
+   "id": "snow",
+   "label": "snow",
+   "stance": [
+    2,
+    1,
+    0
+   ]
+  },
+  {
+   "id": "sea",
+   "label": "the sea",
+   "stance": [
+    0,
+    0,
+    2
+   ]
+  },
+  {
+   "id": "stars",
+   "label": "the stars",
+   "stance": [
+    1,
+    2,
+    1
+   ]
+  },
+  {
+   "id": "tea",
+   "label": "tea",
+   "stance": [
+    0,
+    1,
+    2
+   ]
+  },
+  {
+   "id": "coffee",
+   "label": "coffee",
+   "stance": [
+    2,
+    0,
+    0
+   ]
+  },
+  {
+   "id": "cocoa",
+   "label": "cocoa",
+   "stance": [
+    1,
+    1,
+    0
+   ]
+  },
+  {
+   "id": "ramen",
+   "label": "ramen",
+   "stance": [
+    1,
+    1,
+    2
+   ]
+  },
+  {
+   "id": "snacks",
+   "label": "snacks",
+   "stance": [
+    1,
+    2,
+    0
+   ]
+  },
+  {
+   "id": "naps",
+   "label": "naps",
+   "stance": [
+    0,
+    2,
+    1
+   ]
+  },
+  {
+   "id": "music",
+   "label": "music",
+   "stance": [
+    2,
+    2,
+    1
+   ]
+  },
+  {
+   "id": "dancing",
+   "label": "dancing",
+   "stance": [
+    -1,
+    2,
+    1
+   ]
+  },
+  {
+   "id": "games",
+   "label": "games",
+   "stance": [
+    1,
+    2,
+    1
+   ]
+  },
+  {
+   "id": "books",
+   "label": "books",
+   "stance": [
+    2,
+    0,
+    1
+   ]
+  },
+  {
+   "id": "maps",
+   "label": "maps",
+   "stance": [
+    1,
+    1,
+    2
+   ]
+  },
+  {
+   "id": "cats",
+   "label": "cats",
+   "stance": [
+    1,
+    2,
+    0
+   ]
+  },
+  {
+   "id": "cleaning",
+   "label": "cleaning day",
+   "stance": [
+    2,
+    -1,
+    -1
+   ]
+  },
+  {
+   "id": "missions",
+   "label": "missions",
+   "stance": [
+    2,
+    1,
+    1
+   ]
+  },
+  {
+   "id": "mornings",
+   "label": "mornings",
+   "stance": [
+    2,
+    -1,
+    0
+   ]
+  },
+  {
+   "id": "lanterns",
+   "label": "lanterns",
+   "stance": [
+    1,
+    2,
+    1
+   ]
+  },
+  {
+   "id": "secrets",
+   "label": "secrets",
+   "stance": [
+    0,
+    1,
+    1
+   ]
+  },
+  {
+   "id": "training",
+   "label": "training",
+   "stance": [
+    1,
+    0,
+    2
+   ]
+  },
+  {
+   "id": "outfits",
+   "label": "new outfits",
+   "stance": [
+    1,
+    1,
+    2
+   ]
+  },
+  {
+   "id": "plants",
+   "label": "plants",
+   "stance": [
+    1,
+    0,
+    0
+   ]
+  },
+  {
+   "id": "painting",
+   "label": "fresh paint",
+   "stance": [
+    0,
+    2,
+    1
+   ]
+  },
+  {
+   "id": "schedules",
+   "label": "schedules",
+   "stance": [
+    1,
+    -2,
+    -1
+   ]
+  },
+  {
+   "id": "gadgets",
+   "label": "gadgets",
+   "stance": [
+    0,
+    2,
+    1
+   ]
+  },
+  {
+   "id": "crew",
+   "label": "this crew",
+   "stance": [
+    2,
+    2,
+    2
+   ]
+  }
+ ]
+}
